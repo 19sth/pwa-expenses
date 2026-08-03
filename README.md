@@ -1,1 +1,1 @@
-# pwa-expenses
+# Expenses

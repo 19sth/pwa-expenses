@@ -1,0 +1,26 @@
+{
+  "short_name": "Expenses",
+  "name": "Expenses",
+  "description" : "",
+  "start_url": "/pwa-expenses",
+  "display": "standalone",
+  "theme_color": "#fefefe",
+  "background_color": "#fefefe",
+  "icons": [
+    {
+      "src": "https://fakeimg.pl/16x16/fde047/000/?font=bebas&font_size=16&text=E",
+      "sizes": "16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "https://fakeimg.pl/192x192/fde047/000/?font=bebas&font_size=192&text=E",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://fakeimg.pl/512x512/fde047/000/?font=bebas&font_size=512&text=E",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}
