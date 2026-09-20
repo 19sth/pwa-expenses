@@ -15,6 +15,7 @@ export default function Categories() {
         navItems: [
           { icon: "List", link: "./daily" },
           { icon: "Category", link: "./categories" },
+          { icon: "Process", link: "./processes" },
           { icon: "Info", link: "./about" },
         ],
         title: "categories",

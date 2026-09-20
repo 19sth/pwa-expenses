@@ -19,6 +19,7 @@ import {
   ImportExport,
   Info,
   QuestionMark,
+  ReceiptLong,
   Save,
 } from "@mui/icons-material";
 import { APP_NAME } from "../utils/constants";
@@ -36,6 +37,7 @@ const iconsMap = {
   ImportExport: ImportExport,
   Home: Home,
   Category: Category,
+  Process: ReceiptLong,
 } as Record<string, OverridableComponent<SvgIconTypeMap<{}, "svg">>>;
 
 export interface INavItem {

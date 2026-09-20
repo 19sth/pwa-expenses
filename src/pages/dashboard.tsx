@@ -24,6 +24,7 @@ export default function Dashboard() {
         navItems: [
           { icon: "List", link: "./daily" },
           { icon: "Category", link: "./categories" },
+          { icon: "Process", link: "./processes" },
           { icon: "Info", link: "./about" },
         ],
         title: "dashboard",
@@ -48,9 +49,22 @@ export default function Dashboard() {
     return acc;
   }, {});
 
+  const byProcess = negativeEntries.reduce<Record<string, { total: number; count: number }>>((acc, entry) => {
+    const key = entry.process || "Unspecified";
+    const current = acc[key] ?? { total: 0, count: 0 };
+    current.total += Math.abs(entry.amount);
+    current.count += 1;
+    acc[key] = current;
+    return acc;
+  }, {});
+
   const sortedByDay = Object.entries(byDay).sort(([a], [b]) => a.localeCompare(b));
   const sortedByCategory = Object.entries(byCategory)
     .map(([category, values]) => ({ category, total: values.total, count: values.count }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 5);
+  const sortedByProcess = Object.entries(byProcess)
+    .map(([process, values]) => ({ process, total: values.total, count: values.count }))
     .sort((a, b) => b.total - a.total)
     .slice(0, 5);
 
@@ -131,6 +145,29 @@ export default function Dashboard() {
                 <div key={item.category} className="rounded border border-gray-200 p-2">
                   <div className="flex items-center justify-between gap-2">
                     <Typography fontWeight={600}>{item.category}</Typography>
+                    <Typography color="text.secondary">{percentage.toFixed(1)}%</Typography>
+                  </div>
+                  <Typography variant="body2" color="text.secondary">
+                    {item.count} expenses · {item.total.toFixed(2)} total
+                  </Typography>
+                </div>
+              );
+            })}
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          <Typography variant="subtitle1" fontWeight="600">Negative by process</Typography>
+          <Divider sx={{ my: 1 }} />
+          <Stack spacing={1.5}>
+            {sortedByProcess.map((item) => {
+              const percentage = totalNegative > 0 ? (item.total / totalNegative) * 100 : 0;
+              return (
+                <div key={item.process} className="rounded border border-gray-200 p-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Typography fontWeight={600}>{item.process}</Typography>
                     <Typography color="text.secondary">{percentage.toFixed(1)}%</Typography>
                   </div>
                   <Typography variant="body2" color="text.secondary">

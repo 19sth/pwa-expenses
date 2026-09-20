@@ -4,6 +4,7 @@ export interface ExpenseEntry {
   date: string;
   amount: number;
   category: string;
+  process: string;
   source: string;
   sheet: string;
 }
@@ -63,6 +64,11 @@ const normalizeCategory = (value: string) => {
   return trimmed || "Uncategorized";
 };
 
+const normalizeProcess = (value: string) => {
+  const trimmed = value.trim();
+  return trimmed || "Unspecified";
+};
+
 export const parseExpenseRows = (
   rows: string[][],
   source: string,
@@ -78,7 +84,7 @@ export const parseExpenseRows = (
   }
 
   const headerRow = allRows.find((row) =>
-    row.some((cell) => /date|amount|category|type|description|merchant|total|value|cost/i.test(String(cell)))
+    row.some((cell) => /date|amount|category|type|description|merchant|total|value|cost|işlem|islem|açıklama|tutar|kategori|sektör/i.test(String(cell)))
   );
   const dataRows = headerRow ? allRows.filter((row) => row !== headerRow) : allRows;
 
@@ -90,9 +96,23 @@ export const parseExpenseRows = (
   const amountIndex = headers.findIndex((header) =>
     ["amount", "price", "total", "value", "cost", "tutar", "miktar"].includes(header)
   );
-  const categoryIndex = headers.findIndex((header) =>
-    ["category", "type", "description", "merchant", "details", "kategori", "açıklama"].includes(header)
+  const matchedProcessIndex = headers.findIndex((header) =>
+    ["process", "işlem", "islem", "açıklama", "aciklama", "description", "merchant", "details"].includes(header)
   );
+  const matchedCategoryIndex = headers.findIndex((header) =>
+    ["category", "type", "kategori", "tür", "tur", "sektör", "sektor"].includes(header)
+  );
+
+  // 2. sütun (index 1) işlem, 3. sütun (index 2) kategori
+  const processIndex =
+    matchedProcessIndex >= 0
+      ? matchedProcessIndex
+      : (amountIndex !== 1 && dateIndex !== 1) ? 1 : -1;
+
+  const categoryIndex =
+    matchedCategoryIndex >= 0
+      ? matchedCategoryIndex
+      : (amountIndex !== 2 && dateIndex !== 2) ? 2 : -1;
 
   const inferredRows = dataRows.map((row) => {
     const rowCells = row.map((cell) => String(cell).trim());
@@ -114,22 +134,25 @@ export const parseExpenseRows = (
               const parsed = toAmount(value);
               return parsed !== 0 && Math.abs(parsed) > 0.01;
             }) ?? "";
+    const processValue =
+      processIndex >= 0
+        ? rowCells[processIndex] ?? ""
+        : "";
     const categoryValue =
       categoryIndex >= 0
         ? rowCells[categoryIndex] ?? ""
-        : rowCells.find((cell) => {
-            const value = cell.trim();
-            return Boolean(value) && toDateValue(value) === null && toAmount(value) === 0;
-          }) ?? "";
+        : "";
 
     const parsedDate = toDateValue(String(dateValue));
     const amount = toAmount(String(amountValue));
     const category = normalizeCategory(String(categoryValue));
+    const process = normalizeProcess(String(processValue));
 
     return {
       date: parsedDate ? format(parsedDate, "yyyy-MM-dd") : "",
       amount,
       category,
+      process,
       source,
       sheet,
     };

@@ -89,11 +89,13 @@ export default function DailyExpenses() {
             {selectedDayEntries.map((entry, index) => (
               <div key={`${entry.date}-${index}`} className="rounded border border-gray-200 px-2 py-2">
                 <div className="flex items-center justify-between gap-2">
-                  <Typography fontWeight={600}>{entry.category || "Uncategorized"}</Typography>
+                  <Typography fontWeight={600}>{entry.process || "Unspecified"}</Typography>
                   <Typography fontWeight={600}>{Math.abs(entry.amount).toFixed(2)}</Typography>
                 </div>
                 <Typography variant="body2" color="text.secondary">
-                  {entry.source} · {entry.sheet}
+                  {entry.category || "Uncategorized"}
+                  {entry.source ? ` · ${entry.source}` : ""}
+                  {entry.sheet ? ` · ${entry.sheet}` : ""}
                 </Typography>
               </div>
             ))}
