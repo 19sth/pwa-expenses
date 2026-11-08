@@ -71,7 +71,7 @@ export default function Dashboard() {
   const dailyLabels = sortedByDay.map(([day]) => day);
   const dailyValues = sortedByDay.map(([, total]) => Number(total.toFixed(2)));
   const totalNegative = negativeEntries.reduce((sum, entry) => sum + Math.abs(entry.amount), 0);
-  const projection = buildSpendingProjection(negativeEntries);
+  const projection = buildSpendingProjection(expenses.entries);
   const trendDates = projection.points.map((point) => point.date);
   const labelEvery = Math.max(1, Math.ceil(trendDates.length / 6));
 
@@ -97,7 +97,7 @@ export default function Dashboard() {
             {projection.projectedTotal.toFixed(2)}
           </Typography>
           <Typography color="text.secondary">
-            Projected {format(projection.monthStart, "MMM d")} to {format(projection.nextMonthEnd, "MMM d, yyyy")}
+            Projected {format(projection.windowStart, "MMM d, yyyy")} to {format(projection.windowEnd, "MMM d, yyyy")}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {projection.actualSpend.toFixed(2)} spent so far · {projection.dailyPace.toFixed(2)} per day

@@ -1,12 +1,4 @@
-import {
-  addMonths,
-  differenceInCalendarDays,
-  eachDayOfInterval,
-  endOfMonth,
-  format,
-  startOfDay,
-  startOfMonth,
-} from "date-fns";
+import { addMonths, differenceInCalendarDays, eachDayOfInterval, format, parseISO, startOfDay } from "date-fns";
 import type { ExpenseEntry } from "./expenses";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -21,8 +13,8 @@ export interface SpendingProjectionPoint {
 }
 
 export interface SpendingProjection {
-  monthStart: Date;
-  nextMonthEnd: Date;
+  windowStart: Date;
+  windowEnd: Date;
   today: Date;
   daysElapsed: number;
   daysRemaining: number;
@@ -32,24 +24,46 @@ export interface SpendingProjection {
   points: SpendingProjectionPoint[];
 }
 
+const earliestDocumentDate = (entries: ExpenseEntry[]) => {
+  const dates = entries.map((entry) => entry.date).filter((date) => ISO_DATE.test(date));
+  dates.sort();
+  return dates[0] ?? null;
+};
+
 /**
- * Project how much will be spent from the start of the current month through the end of next month.
- * Pace is spending recorded from the start of this month through today, divided by days elapsed (today included).
- * That daily pace is extended through the remaining days until the last day of next month.
+ * Project spending from the earliest date in the imported documents through one calendar month later.
+ * Pace is spending between that first date and today, divided by the days elapsed in the window so far.
  */
 export function buildSpendingProjection(entries: ExpenseEntry[], now: Date = new Date()): SpendingProjection {
   const today = startOfDay(now);
-  const monthStart = startOfMonth(today);
-  const nextMonthEnd = startOfDay(endOfMonth(addMonths(today, 1)));
   const todayKey = format(today, "yyyy-MM-dd");
-  const monthStartKey = format(monthStart, "yyyy-MM-dd");
+  const windowStart = parseISO(earliestDocumentDate(entries) ?? todayKey);
+  const windowEnd = addMonths(windowStart, 1);
+  const windowStartKey = format(windowStart, "yyyy-MM-dd");
+  const windowEndKey = format(windowEnd, "yyyy-MM-dd");
+
+  const elapsedEndKey =
+    todayKey < windowStartKey ? null : todayKey < windowEndKey ? todayKey : windowEndKey;
+  const daysElapsed = elapsedEndKey ? differenceInCalendarDays(parseISO(elapsedEndKey), windowStart) + 1 : 0;
+  const daysRemaining =
+    todayKey >= windowEndKey
+      ? 0
+      : todayKey < windowStartKey
+        ? differenceInCalendarDays(windowEnd, windowStart) + 1
+        : differenceInCalendarDays(windowEnd, today);
 
   const spentByDay = new Map<string, number>();
   entries.forEach((entry) => {
     if (entry.amount >= 0 || !ISO_DATE.test(entry.date)) {
       return;
     }
-    if (entry.date < monthStartKey || entry.date > todayKey) {
+    if (entry.date < windowStartKey || entry.date > windowEndKey) {
+      return;
+    }
+    if (elapsedEndKey && entry.date > elapsedEndKey) {
+      return;
+    }
+    if (!elapsedEndKey) {
       return;
     }
     spentByDay.set(entry.date, (spentByDay.get(entry.date) ?? 0) + Math.abs(entry.amount));
@@ -60,16 +74,14 @@ export function buildSpendingProjection(entries: ExpenseEntry[], now: Date = new
     exactSpend += value;
   });
   const actualSpend = roundMoney(exactSpend);
-  const daysElapsed = differenceInCalendarDays(today, monthStart) + 1;
-  const daysRemaining = differenceInCalendarDays(nextMonthEnd, today);
   const dailyPace = daysElapsed > 0 ? actualSpend / daysElapsed : 0;
 
   let running = 0;
-  const points = eachDayOfInterval({ start: monthStart, end: nextMonthEnd }).map((day) => {
+  const points = eachDayOfInterval({ start: windowStart, end: windowEnd }).map((day) => {
     const date = format(day, "yyyy-MM-dd");
     const spentOnDay = spentByDay.get(date) ?? 0;
-    const isActual = date <= todayKey;
-    const isProjected = date >= todayKey;
+    const isActual = elapsedEndKey != null && date <= elapsedEndKey;
+    const isProjected = date >= todayKey && date <= windowEndKey;
     if (isActual) {
       running += spentOnDay;
     }
@@ -78,15 +90,16 @@ export function buildSpendingProjection(entries: ExpenseEntry[], now: Date = new
       date,
       spentOnDay: isActual ? spentOnDay : 0,
       actual: isActual ? roundMoney(running) : null,
-      projected: isProjected ? roundMoney(actualSpend + dailyPace * daysAfterToday) : null,
+      projected: isProjected ? roundMoney(actualSpend + dailyPace * Math.max(daysAfterToday, 0)) : null,
     };
   });
 
-  const projectedTotal = points.length ? points[points.length - 1].projected ?? actualSpend : actualSpend;
+  const lastPoint = points[points.length - 1];
+  const projectedTotal = lastPoint ? lastPoint.projected ?? lastPoint.actual ?? actualSpend : actualSpend;
 
   return {
-    monthStart,
-    nextMonthEnd,
+    windowStart,
+    windowEnd,
     today,
     daysElapsed,
     daysRemaining,

@@ -14,74 +14,84 @@ const entry = (date: string, amount: number, process = "Market"): ExpenseEntry =
 describe("buildSpendingProjection", () => {
   const today = new Date(2026, 10, 8, 15, 30, 0);
 
-  it("projects this month's pace from the start of the month through the end of next month", () => {
+  it("starts at the earliest imported date and ends one calendar month later", () => {
     const projection = buildSpendingProjection(
       [
-        entry("2026-10-15", -1000),
-        entry("2026-11-01", -80),
-        entry("2026-11-08", -80),
-        entry("2026-11-20", -500),
-        entry("2026-11-03", 250),
+        entry("2026-11-01", -1500),
+        entry("2026-10-20", -300),
+        entry("2026-11-02", -120.5),
+        entry("2026-11-08", -600),
+        entry("2026-11-08", 5000),
+        entry("2026-11-21", -999),
       ],
       today
     );
 
-    expect(format(projection.monthStart, "yyyy-MM-dd")).toBe("2026-11-01");
-    expect(format(projection.nextMonthEnd, "yyyy-MM-dd")).toBe("2026-12-31");
-    expect(projection.daysElapsed).toBe(8);
-    expect(projection.daysRemaining).toBe(53);
-    expect(projection.actualSpend).toBe(160);
-    expect(projection.dailyPace).toBe(20);
-    expect(projection.projectedTotal).toBe(1220);
-    expect(projection.points).toHaveLength(61);
-    expect(projection.points[0]).toMatchObject({ date: "2026-11-01", actual: 80, projected: null, spentOnDay: 80 });
-    expect(projection.points[6]).toMatchObject({ date: "2026-11-07", actual: 80, projected: null, spentOnDay: 0 });
-    expect(projection.points[7]).toMatchObject({ date: "2026-11-08", actual: 160, projected: 160, spentOnDay: 80 });
-    expect(projection.points[8]).toMatchObject({ date: "2026-11-09", actual: null, projected: 180 });
+    expect(format(projection.windowStart, "yyyy-MM-dd")).toBe("2026-10-20");
+    expect(format(projection.windowEnd, "yyyy-MM-dd")).toBe("2026-11-20");
+    expect(projection.daysElapsed).toBe(20);
+    expect(projection.daysRemaining).toBe(12);
+    expect(projection.actualSpend).toBe(2520.5);
+    expect(projection.dailyPace).toBe(126.025);
+    expect(projection.projectedTotal).toBe(4032.8);
+    expect(projection.points[0]).toMatchObject({ date: "2026-10-20", actual: 300, projected: null });
     expect(projection.points[projection.points.length - 1]).toMatchObject({
-      date: "2026-12-31",
+      date: "2026-11-20",
       actual: null,
-      projected: 1220,
+      projected: 4032.8,
     });
+    const todayPoint = projection.points.find((point) => point.date === "2026-11-08");
+    expect(todayPoint).toMatchObject({ actual: 2520.5, projected: 2520.5 });
   });
 
-  it("uses an uneven pace and still lands on the end of next month", () => {
-    const projection = buildSpendingProjection([entry("2026-11-03", -100)], today);
+  it("uses an earlier incoming transaction as the document start", () => {
+    const projection = buildSpendingProjection(
+      [entry("2026-10-20", 5000), entry("2026-10-25", -100)],
+      today
+    );
 
+    expect(format(projection.windowStart, "yyyy-MM-dd")).toBe("2026-10-20");
+    expect(format(projection.windowEnd, "yyyy-MM-dd")).toBe("2026-11-20");
+    expect(projection.daysElapsed).toBe(20);
     expect(projection.actualSpend).toBe(100);
-    expect(projection.dailyPace).toBe(12.5);
-    expect(projection.projectedTotal).toBe(762.5);
-    expect(projection.points[0]).toMatchObject({ date: "2026-11-01", actual: 0, spentOnDay: 0 });
-    expect(projection.points[2]).toMatchObject({ date: "2026-11-03", actual: 100, spentOnDay: 100 });
-    expect(projection.points[7]).toMatchObject({ date: "2026-11-08", actual: 100, projected: 100 });
+    expect(projection.dailyPace).toBe(5);
+    expect(projection.projectedTotal).toBe(160);
   });
 
-  it("projects zero when nothing has been spent this month", () => {
-    const projection = buildSpendingProjection([entry("2026-10-02", -400)], today);
+  it("keeps the pace flat when the first date is still ahead", () => {
+    const projection = buildSpendingProjection([entry("2026-12-01", -80)], today);
 
+    expect(format(projection.windowStart, "yyyy-MM-dd")).toBe("2026-12-01");
+    expect(format(projection.windowEnd, "yyyy-MM-dd")).toBe("2027-01-01");
+    expect(projection.daysElapsed).toBe(0);
     expect(projection.actualSpend).toBe(0);
-    expect(projection.dailyPace).toBe(0);
     expect(projection.projectedTotal).toBe(0);
-    expect(projection.points.every((point) => point.projected == null || point.projected === 0)).toBe(true);
-    expect(projection.points.every((point) => point.actual == null || point.actual === 0)).toBe(true);
   });
 
-  it("counts the first day of the month as one elapsed day", () => {
-    const first = new Date(2026, 10, 1, 9, 0, 0);
-    const projection = buildSpendingProjection([entry("2026-11-01", -50)], first);
+  it("does not project past the window when today is already beyond it", () => {
+    const projection = buildSpendingProjection(
+      [entry("2026-08-21", -400), entry("2026-09-21", -50), entry("2026-10-01", -25)],
+      today
+    );
 
-    expect(projection.daysElapsed).toBe(1);
-    expect(format(projection.nextMonthEnd, "yyyy-MM-dd")).toBe("2026-12-31");
-    expect(projection.daysRemaining).toBe(60);
-    expect(projection.projectedTotal).toBe(3050);
-    expect(projection.points[0]).toMatchObject({ actual: 50, projected: 50 });
+    expect(format(projection.windowStart, "yyyy-MM-dd")).toBe("2026-08-21");
+    expect(format(projection.windowEnd, "yyyy-MM-dd")).toBe("2026-09-21");
+    expect(projection.daysRemaining).toBe(0);
+    expect(projection.actualSpend).toBe(450);
+    expect(projection.projectedTotal).toBe(450);
+    expect(projection.points.every((point) => point.projected == null)).toBe(true);
+    expect(projection.points[projection.points.length - 1]).toMatchObject({ date: "2026-09-21", actual: 450 });
   });
 
-  it("ends on the real last day of next month, including February", () => {
-    const january = buildSpendingProjection([], new Date(2026, 0, 31));
-    expect(format(january.nextMonthEnd, "yyyy-MM-dd")).toBe("2026-02-28");
+  it("clamps a 31st to the last real day when the next month is shorter", () => {
+    const january = buildSpendingProjection([entry("2026-01-31", -31)], new Date(2026, 0, 31));
+    expect(format(january.windowStart, "yyyy-MM-dd")).toBe("2026-01-31");
+    expect(format(january.windowEnd, "yyyy-MM-dd")).toBe("2026-02-28");
+    expect(january.daysElapsed).toBe(1);
+    expect(january.daysRemaining).toBe(28);
+    expect(january.projectedTotal).toBe(899);
 
-    const leap = buildSpendingProjection([], new Date(2024, 0, 15));
-    expect(format(leap.nextMonthEnd, "yyyy-MM-dd")).toBe("2024-02-29");
+    const leap = buildSpendingProjection([entry("2024-01-31", -10)], new Date(2024, 0, 31));
+    expect(format(leap.windowEnd, "yyyy-MM-dd")).toBe("2024-02-29");
   });
 });

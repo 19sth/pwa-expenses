@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { render, screen } from "@testing-library/react";
 import { configureStore } from "@reduxjs/toolkit";
-import { format, startOfMonth } from "date-fns";
+import { addDays, format } from "date-fns";
 import { Provider } from "react-redux";
 import expensesReducer from "../redux/sliceExpenses";
 import pageReducer from "../redux/slicePage";
@@ -49,10 +49,10 @@ const entry = (date: string, amount: number): ExpenseEntry => ({
 });
 
 describe("Dashboard spending projection", () => {
-  it("shows the projected total and a dashed forecast through the end of next month", () => {
-    const monthStart = format(startOfMonth(new Date()), "yyyy-MM-dd");
-    const entries = [entry("2020-01-02", -9999), entry(monthStart, -200), entry(monthStart, 80)];
-    const projection = buildSpendingProjection(entries.filter((item) => item.amount < 0));
+  it("shows the projected total from the earliest imported date through one month later", () => {
+    const earliest = format(addDays(new Date(), -10), "yyyy-MM-dd");
+    const entries = [entry(earliest, 80), entry(earliest, -200), entry(format(addDays(new Date(), 40), "yyyy-MM-dd"), -9999)];
+    const projection = buildSpendingProjection(entries);
 
     const store = configureStore({
       reducer: { page: pageReducer, expenses: expensesReducer },
@@ -69,8 +69,8 @@ describe("Dashboard spending projection", () => {
     );
 
     expect(screen.getByRole("heading", { level: 4 })).toHaveTextContent(projection.projectedTotal.toFixed(2));
-    expect(screen.getByText(/Projected /)).toHaveTextContent(format(projection.monthStart, "MMM d"));
-    expect(screen.getByText(/Projected /)).toHaveTextContent(format(projection.nextMonthEnd, "MMM d, yyyy"));
+    expect(screen.getByText(/Projected /)).toHaveTextContent(format(projection.windowStart, "MMM d, yyyy"));
+    expect(screen.getByText(/Projected /)).toHaveTextContent(format(projection.windowEnd, "MMM d, yyyy"));
     expect(screen.getByText(`${projection.actualSpend.toFixed(2)} spent so far · ${projection.dailyPace.toFixed(2)} per day`)).toBeInTheDocument();
     const spendingSeries = container.querySelector("[data-series='actual']");
     const projectionSeries = container.querySelector("[data-series='projection']");
@@ -83,8 +83,8 @@ describe("Dashboard spending projection", () => {
 
     const todayIndex = dates.indexOf(format(projection.today, "yyyy-MM-dd"));
 
-    expect(dates[0]).toBe(format(projection.monthStart, "yyyy-MM-dd"));
-    expect(dates[dates.length - 1]).toBe(format(projection.nextMonthEnd, "yyyy-MM-dd"));
+    expect(dates[0]).toBe(format(projection.windowStart, "yyyy-MM-dd"));
+    expect(dates[dates.length - 1]).toBe(format(projection.windowEnd, "yyyy-MM-dd"));
     expect(todayIndex).toBeGreaterThanOrEqual(0);
     expect(actualValues[todayIndex]).toBe(String(projection.actualSpend));
     expect(actualValues[actualValues.length - 1]).toBe("null");
