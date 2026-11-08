@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Card, CardContent, Divider, Stack, Typography } from "@mui/material";
-import { Link } from "react-router-dom";
 import {
   ChartContainer,
   ChartsLegend,
@@ -10,9 +9,10 @@ import {
   LinePlot,
   BarPlot,
 } from "@mui/x-charts";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { updatePageState } from "../redux/slicePage";
 import { RootState } from "../redux/store";
+import { buildSpendingProjection } from "../utils/spendingProjection";
 
 export default function Dashboard() {
   const dispatch = useDispatch();
@@ -70,13 +70,10 @@ export default function Dashboard() {
 
   const dailyLabels = sortedByDay.map(([day]) => day);
   const dailyValues = sortedByDay.map(([, total]) => Number(total.toFixed(2)));
-  const cumulativeValues = dailyValues.reduce<number[]>((acc, value, index) => {
-    const running = (acc[index - 1] ?? 0) + value;
-    acc.push(running);
-    return acc;
-  }, []);
-  const latestValue = cumulativeValues[cumulativeValues.length - 1] ?? 0;
   const totalNegative = negativeEntries.reduce((sum, entry) => sum + Math.abs(entry.amount), 0);
+  const projection = buildSpendingProjection(expenses.entries);
+  const trendDates = projection.points.map((point) => point.date);
+  const labelEvery = Math.max(1, Math.ceil(trendDates.length / 6));
 
   if (!negativeEntries.length) {
     return (
@@ -97,16 +94,61 @@ export default function Dashboard() {
         <CardContent>
           <Typography variant="h6">Negative spending trend</Typography>
           <Typography variant="h4" fontWeight="bold" sx={{ mt: 1 }}>
-            {latestValue.toFixed(2)}
+            {projection.projectedTotal.toFixed(2)}
           </Typography>
-          <Typography color="text.secondary">Latest cumulative value</Typography>
+          <Typography color="text.secondary">
+            Projected {format(projection.windowStart, "MMM d, yyyy")} to {format(projection.windowEnd, "MMM d, yyyy")}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {projection.actualSpend.toFixed(2)} spent so far · {projection.dailyPace.toFixed(2)} per day
+          </Typography>
           <Divider sx={{ my: 1 }} />
           <ChartContainer
-            series={[{ type: "line", label: "Spending", data: cumulativeValues }]}
-            xAxis={[{ scaleType: "point", data: dailyLabels.map((value) => format(new Date(value), "MMM d")) }]}
+            series={[
+              {
+                type: "line",
+                id: "actual",
+                label: "Spending",
+                data: projection.points.map((point) => point.actual),
+                curve: "linear",
+                connectNulls: false,
+                showMark: ({ index }) => projection.points[index]?.spentOnDay > 0,
+              },
+              {
+                type: "line",
+                id: "projection",
+                label: "Projection",
+                data: projection.points.map((point) => point.projected),
+                curve: "linear",
+                connectNulls: false,
+                showMark: ({ index }) => index === projection.points.length - 1,
+              },
+            ]}
+            xAxis={[
+              {
+                scaleType: "point",
+                data: trendDates,
+                valueFormatter: (value) => format(parseISO(String(value)), "MMM d"),
+                tickLabelInterval: (_value, index) => {
+                  const last = trendDates.length - 1;
+                  if (index === 0 || index === last) {
+                    return true;
+                  }
+                  if (last - index < Math.ceil(labelEvery / 2)) {
+                    return false;
+                  }
+                  return index % labelEvery === 0;
+                },
+              },
+            ]}
             yAxis={[{ valueFormatter: (value) => `${(value / 1000).toFixed(0)}K` }]}
+            sx={{
+              "& .MuiLineElement-series-projection": {
+                strokeDasharray: "6 4",
+              },
+            }}
             width={Math.min(560, window.innerWidth - 40)}
-            height={220}
+            height={240}
           >
             <LinePlot />
             <ChartsXAxis />
