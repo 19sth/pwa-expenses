@@ -1,13 +1,18 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { Card, CardContent, Checkbox, Divider, Stack, Typography } from "@mui/material";
+import { Button, Card, CardContent, Checkbox, Divider, Stack, TextField, Typography } from "@mui/material";
 import { updatePageState } from "../redux/slicePage";
 import { RootState } from "../redux/store";
+import { filterExpenseEntries, parseAmountBound } from "../utils/filterExpenses";
 
 export default function Processes() {
   const dispatch = useDispatch();
   const expenses = useSelector((state: RootState) => state.expenses);
   const [selectedProcesses, setSelectedProcesses] = useState<string[]>([]);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
 
   useEffect(() => {
     dispatch(
@@ -24,8 +29,22 @@ export default function Processes() {
   }, [dispatch]);
 
   const negativeEntries = expenses.entries.filter((entry) => entry.amount < 0);
+  const filtersActive = Boolean(dateFrom || dateTo || amountMin.trim() || amountMax.trim());
+  const filteredEntries = filterExpenseEntries(negativeEntries, {
+    dateFrom,
+    dateTo,
+    amountMin: parseAmountBound(amountMin),
+    amountMax: parseAmountBound(amountMax),
+  });
 
-  const byProcess = negativeEntries.reduce<Record<string, { total: number; count: number }>>((acc, entry) => {
+  const clearFilters = () => {
+    setDateFrom("");
+    setDateTo("");
+    setAmountMin("");
+    setAmountMax("");
+  };
+
+  const byProcess = filteredEntries.reduce<Record<string, { total: number; count: number }>>((acc, entry) => {
     const key = entry.process || "Unspecified";
     const current = acc[key] ?? { total: 0, count: 0 };
     current.total += Math.abs(entry.amount);
@@ -38,12 +57,12 @@ export default function Processes() {
     .map(([process, values]) => ({ process, total: values.total, count: values.count }))
     .sort((a, b) => b.total - a.total);
 
-  const totalNegative = negativeEntries.reduce((sum, entry) => sum + Math.abs(entry.amount), 0);
-  const selectedTotal = sortedByProcess
-    .filter((item) => selectedProcesses.includes(item.process))
-    .reduce((sum, item) => sum + item.total, 0);
-  const summaryTotal = selectedProcesses.length > 0 ? selectedTotal : totalNegative;
-  const summaryLabel = selectedProcesses.length > 0 ? "Selected total" : "Total negative expense";
+  const totalNegative = filteredEntries.reduce((sum, entry) => sum + Math.abs(entry.amount), 0);
+  const visibleSelected = sortedByProcess.filter((item) => selectedProcesses.includes(item.process));
+  const selectedTotal = visibleSelected.reduce((sum, item) => sum + item.total, 0);
+  const summaryTotal = visibleSelected.length > 0 ? selectedTotal : totalNegative;
+  const summaryLabel =
+    visibleSelected.length > 0 ? "Selected total" : filtersActive ? "Filtered total" : "Total negative expense";
 
   const toggleProcess = (process: string) => {
     setSelectedProcesses((current) =>
@@ -73,6 +92,52 @@ export default function Processes() {
             {summaryTotal.toFixed(2)}
           </Typography>
           <Typography color="text.secondary">{summaryLabel}</Typography>
+          <Divider sx={{ my: 1.5 }} />
+          <Stack spacing={1}>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+              <TextField
+                label="From date"
+                type="date"
+                size="small"
+                fullWidth
+                value={dateFrom}
+                onChange={(event) => setDateFrom(event.target.value)}
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                label="To date"
+                type="date"
+                size="small"
+                fullWidth
+                value={dateTo}
+                onChange={(event) => setDateTo(event.target.value)}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Stack>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+              <TextField
+                label="Min amount"
+                type="number"
+                size="small"
+                fullWidth
+                value={amountMin}
+                onChange={(event) => setAmountMin(event.target.value)}
+                inputProps={{ step: "0.01", inputMode: "decimal" }}
+              />
+              <TextField
+                label="Max amount"
+                type="number"
+                size="small"
+                fullWidth
+                value={amountMax}
+                onChange={(event) => setAmountMax(event.target.value)}
+                inputProps={{ step: "0.01", inputMode: "decimal" }}
+              />
+            </Stack>
+            <Button variant="outlined" onClick={clearFilters} disabled={!filtersActive}>
+              Clear filters
+            </Button>
+          </Stack>
         </CardContent>
       </Card>
 
@@ -80,6 +145,9 @@ export default function Processes() {
         <CardContent>
           <Typography variant="subtitle1" fontWeight="600">Process breakdown</Typography>
           <Divider sx={{ my: 1 }} />
+          {sortedByProcess.length === 0 ? (
+            <Typography color="text.secondary">No processes match these filters.</Typography>
+          ) : null}
           <Stack spacing={1.5}>
             {sortedByProcess.map((item) => {
               const percentage = totalNegative > 0 ? (item.total / totalNegative) * 100 : 0;
